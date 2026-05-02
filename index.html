@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EP Collection Notifier</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+// ─── PIN LOCK ─────────────────────────────────────────────────────────────────
+// Change this PIN to whatever you want
+const APP_PIN = '1234';
+
+let pinEntry = '';
+
+function pinKey(digit) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += digit;
+  updatePinDots();
+  if (pinEntry.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinDel() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function pinClear() {
+  pinEntry = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('d' + i).classList.toggle('filled', i < pinEntry.length);
+  }
+}
+
+function checkPin() {
+  if (pinEntry === APP_PIN) {
+    document.getElementById('pin-overlay').style.display = 'none';
+    sessionStorage.setItem('ep_pin_ok', '1');
+  } else {
+    document.getElementById('pin-error').textContent = 'Incorrect PIN — try again';
+    pinEntry = '';
+    updatePinDots();
+  }
+}
+
+// Skip PIN if already authenticated this session
+if (sessionStorage.getItem('ep_pin_ok') === '1') {
+  document.getElementById('pin-overlay').style.display = 'none';
+}
+
+</script>
+<style>
+:root {
+  --gold:#B8966A;--gold-lt:#F5EFE6;--gold-dk:#8B6E4E;
+  --navy:#1C2B3A;--surface:#FAFAF8;
+  --border:rgba(184,150,106,0.22);--border-s:rgba(184,150,106,0.45);
+  --text:#1C2B3A;--muted:#6B7A89;
+  --r:10px;--rs:6px;--ui:-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--ui);background:var(--surface);color:var(--text);min-height:100vh}
+
+.hdr{background:var(--navy);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.hdr-brand{display:flex;align-items:center;gap:10px}
+.hdr-logo{width:30px;height:30px;background:var(--gold);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700;letter-spacing:-1px}
+.hdr-title{font-size:14px;font-weight:500;color:#fff}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px}
+.hdr-pill{font-size:11px;padding:3px 10px;border-radius:4px;background:rgba(184,150,106,0.15);color:var(--gold);border:1px solid rgba(184,150,106,0.3);white-space:nowrap}
+.hdr-pill.ok{background:rgba(59,109,17,0.15);color:#3B6D11;border-color:rgba(59,109,17,0.3)}
+
+.main{max-width:660px;margin:0 auto;padding:20px 16px}
+
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:14px}
+.card-title{font-size:10px;font-weight:600;letter-spacing:.9px;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
+
+/* UPLOAD */
+.drop-zone{border:1.5px dashed var(--border-s);border-radius:var(--rs);padding:24px;text-align:center;cursor:pointer;transition:all .15s}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--gold);background:var(--gold-lt)}
+.drop-zone input{display:none}
+.dz-icon{font-size:26px;margin-bottom:6px}
+.dz-title{font-size:13px;font-weight:500;margin-bottom:3px}
+.dz-sub{font-size:11px;color:var(--muted)}
+.loaded-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(59,109,17,0.06);border:1px solid rgba(59,109,17,0.2);border-radius:var(--rs)}
+.fetch-error{background:#FCEBEB;border:1px solid #F7C1C1;border-radius:var(--rs);padding:10px 14px;font-size:12px;color:#A32D2D;display:none}
+.loaded-info{flex:1}
+.loaded-name{font-size:13px;font-weight:500;color:#3B6D11}
+.loaded-ct{font-size:11px;color:#3B6D11;opacity:.8}
+.btn-replace{font-size:11px;padding:4px 10px;background:none;border:1px solid rgba(59,109,17,0.3);border-radius:4px;color:#3B6D11;cursor:pointer;font-family:var(--ui)}
+
+/* SCAN */
+.scan-wrap{position:relative}
+.scan-wrap input{width:100%;height:44px;border:2px solid var(--border-s);border-radius:var(--rs);padding:0 40px 0 14px;font-size:15px;font-family:monospace;letter-spacing:.5px;color:var(--text);outline:none;background:#fff;transition:border-color .15s}
+.scan-wrap input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,150,106,0.1)}
+.scan-wrap input::placeholder{font-family:var(--ui);font-size:13px;letter-spacing:0;color:var(--muted)}
+.scan-x{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px}
+.scan-hint{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* PATIENT CARD */
+.pt-card{display:none;background:var(--gold-lt);border:1px solid var(--border-s);border-radius:var(--rs);padding:14px;margin-top:10px}
+.pt-card.show{display:block}
+.pt-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.pt-avatar{width:38px;height:38px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+.pt-name{font-size:15px;font-weight:500}
+.pt-ref{font-size:11px;color:var(--muted);font-family:monospace;margin-top:1px}
+.pt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pt-item .lbl{font-size:10px;color:var(--muted);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.pt-item .val{font-size:13px;font-weight:500}
+.val.warn{color:#A32D2D}.val.ok{color:#3B6D11}
+.phone-row{display:flex;gap:6px;align-items:center}
+.phone-row input{flex:1;height:32px;border:1px solid var(--border-s);border-radius:4px;padding:0 8px;font-size:13px;font-family:var(--ui);color:var(--text);outline:none;background:#fff}
+.phone-row input:focus{border-color:var(--gold)}
+.phone-warn{font-size:11px;color:#A32D2D;margin-top:3px;display:none}
+
+.not-found{display:none;margin-top:10px;padding:10px 14px;background:#FCEBEB;border:1px solid #F7C1C1;border-radius:var(--rs);font-size:12px;color:#A32D2D}
+.not-found.show{display:block}
+.picklist-item{padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:6px;cursor:pointer;background:#fff;transition:all .15s}
+.picklist-item:hover{border-color:var(--gold);background:var(--gold-lt)}
+.picklist-item:last-child{margin-bottom:0}
+
+/* PRODUCT */
+.prod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.prod-opt input[type=radio]{position:absolute;opacity:0;width:0;height:0}
+.prod-opt label{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:all .15s;text-align:center}
+.prod-opt label .icon{font-size:22px;line-height:1}
+.prod-opt label .nm{font-size:12px;font-weight:500;color:var(--text)}
+.prod-opt input:checked + label{border-color:var(--gold);background:var(--gold-lt);box-shadow:0 0 0 3px rgba(184,150,106,0.1)}
+.prod-opt input:checked + label .nm{color:var(--gold-dk)}
+
+/* ORTHOK SLOTS */
+.ok-slots{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.ok-slots.show{display:block}
+.slot-section{margin-bottom:12px}
+.slot-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:7px}
+.slot-lbl span{color:var(--gold);font-size:12px}
+.slot-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.field input,.field select{width:100%;height:36px;border:1px solid var(--border);border-radius:var(--rs);padding:0 10px;font-size:13px;font-family:var(--ui);color:var(--text);background:#fff;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:var(--gold)}
+.slot-note{font-size:11px;color:var(--muted);margin-top:6px;padding:7px 10px;background:#FFF8F0;border-radius:4px;border-left:3px solid var(--gold)}
+
+/* LANG */
+.lang-tabs{display:flex;border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:12px}
+.lang-tab{flex:1;padding:8px;text-align:center;font-size:12px;font-weight:500;cursor:pointer;background:none;border:none;color:var(--muted);font-family:var(--ui);transition:all .15s}
+.lang-tab.active{background:var(--navy);color:#fff}
+
+/* MESSAGE */
+.msg-box{background:#F8F8F6;border:1px solid var(--border);border-radius:var(--rs);padding:14px;font-size:13px;line-height:1.65;color:var(--text);min-height:120px;white-space:pre-wrap;word-break:break-word}
+.msg-ph{color:var(--muted);font-style:italic}
+.msg-actions{display:flex;gap:8px;margin-top:10px}
+.btn-wa{flex:1;height:44px;background:#25D366;border:none;border-radius:var(--rs);color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--ui);transition:opacity .15s;text-decoration:none}
+.btn-wa:hover{opacity:.9}
+.btn-copy{height:44px;padding:0 16px;background:none;border:1px solid var(--border);border-radius:var(--rs);color:var(--muted);font-size:13px;cursor:pointer;font-family:var(--ui);transition:all .15s;white-space:nowrap}
+.btn-copy:hover{border-color:var(--gold);color:var(--gold-dk)}
+.btn-copy.copied{border-color:#3B6D11;color:#3B6D11}
+.wa-svg{width:17px;height:17px;fill:#fff;flex-shrink:0}
+
+/* LOG */
+.log-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.log-ct{font-size:11px;background:var(--gold-lt);color:var(--gold-dk);border-radius:4px;padding:2px 8px;font-weight:500}
+.log-btns{display:flex;gap:6px}
+.btn-sm{font-size:11px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;font-family:var(--ui);transition:all .15s}
+.btn-sm:hover{border-color:var(--gold);color:var(--gold-dk)}
+.btn-sm.red{color:#A32D2D;border-color:#F7C1C1}.btn-sm.red:hover{background:#FCEBEB}
+.log-empty{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+.log-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.log-tbl th{text-align:left;padding:6px 8px;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+.log-tbl td{padding:8px;border-bottom:1px solid rgba(184,150,106,0.07);vertical-align:middle}
+.log-tbl tr:last-child td{border-bottom:none}
+.badge{font-size:10px;padding:2px 7px;border-radius:3px;font-weight:500;white-space:nowrap}
+.bg{background:#E6F1FB;color:#185FA5}
+.bc{background:#EAF3DE;color:#3B6D11}
+.bo{background:#FAEEDA;color:#854F0B}
+.btn-rs{padding:3px 8px;font-size:10px;background:none;border:1px solid #c8e6c9;border-radius:3px;color:#3B6D11;cursor:pointer;font-family:var(--ui);text-decoration:none;display:inline-block}
+.btn-rs:hover{background:#EAF3DE}
+.btn-dl{padding:3px 6px;font-size:10px;background:none;border:1px solid #F7C1C1;border-radius:3px;color:#A32D2D;cursor:pointer;font-family:var(--ui);margin-left:3px}
+.btn-dl:hover{background:#FCEBEB}
+
+.alert{padding:10px 14px;border-radius:var(--rs);font-size:13px;margin-bottom:12px;display:none}
+.a-ok{background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97}
+.a-err{background:#FCEBEB;color:#A32D2D;border:1px solid #F7C1C1}
+
+@media(max-width:480px){.slot-row{grid-template-columns:1fr}.pt-grid{grid-template-columns:1fr}}
+
+/* PIN LOCK */
+.pin-overlay{position:fixed;inset:0;background:var(--navy);z-index:9999;display:flex;align-items:center;justify-content:center}
+.pin-box{background:#fff;border-radius:var(--r);padding:32px 28px;width:300px;text-align:center}
+.pin-logo{width:48px;height:48px;background:var(--gold);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin:0 auto 16px;letter-spacing:-1px}
+.pin-title{font-size:16px;font-weight:600;color:var(--navy);margin-bottom:4px}
+.pin-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;background:var(--border);transition:background .15s}
+.pin-dot.filled{background:var(--navy)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pin-key{height:52px;border:1px solid var(--border);border-radius:var(--rs);background:#fff;font-size:18px;font-weight:500;color:var(--navy);cursor:pointer;font-family:var(--ui);transition:all .15s}
+.pin-key:hover{background:var(--gold-lt);border-color:var(--gold)}
+.pin-key.del{font-size:14px;color:var(--muted)}
+.pin-error{font-size:12px;color:#A32D2D;margin-top:10px;min-height:18px}
+</style>
+</head>
+<body>
+
+
+<div class="pin-overlay" id="pin-overlay">
+  <div class="pin-box">
+    <div class="pin-logo">EP</div>
+    <div class="pin-title">Eyecare People</div>
+    <div class="pin-sub">Enter PIN to continue</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinClear()">✕</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<div class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">EP</div>
+    <div>
+      <div class="hdr-title">Collection Notifier</div>
+      <div class="hdr-sub">Eyecare People · Palais Renaissance</div>
+    </div>
+  </div>
+  <div class="hdr-pill" id="hdr-pill">No list loaded</div>
+</div>
+
+<div class="main">
+  <div id="alert-box" class="alert"></div>
+
+  <!-- STEP 1 -->
+  <div class="card">
+    <div class="card-title">Step 1 · Uncollected Orders</div>
+    <div id="fetch-status">
+      <div class="loaded-bar" style="background:rgba(184,150,106,0.08);border:1px solid var(--border-s)">
+        <span style="font-size:20px" id="fetch-icon">⏳</span>
+        <div class="loaded-info">
+          <div class="loaded-name" id="loaded-name" style="color:var(--text)">Loading latest orders from OneDrive...</div>
+          <div class="loaded-ct" id="loaded-ct" style="color:var(--muted)">Fetching via Make.com</div>
+        </div>
+        <button class="btn-replace" onclick="fetchFromMake()">Refresh</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:11px;color:var(--muted)">or upload manually</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <div style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px dashed var(--border-s);border-radius:var(--rs);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s" 
+             onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-dk)'"
+             onmouseout="this.style.borderColor='var(--border-s)';this.style.color='var(--muted)'">
+        <span style="font-size:18px">📂</span>
+        <span>Upload Frontwave .xlsx file directly</span>
+        <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleManualUpload(this.files[0])">
+      </label>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card">
+    <div class="card-title">Step 2 · Scan Order Barcode</div>
+    <div class="scan-wrap">
+      <input type="text" id="scan-inp"
+             placeholder="Scan barcode · or type last 3+ digits  e.g. 351"
+             autocomplete="off" oninput="onScanInput(this.value)">
+      <button class="scan-x" onclick="clearScan()">✕</button>
+    </div>
+    <div class="scan-hint">Scan barcode for instant match · or type last 3+ digits to search</div>
+
+    <div class="pt-card" id="pt-card">
+      <div class="pt-hdr">
+        <div class="pt-avatar" id="pt-avatar">?</div>
+        <div>
+          <div class="pt-name" id="pt-name">—</div>
+          <div class="pt-ref" id="pt-ref">—</div>
+        </div>
+      </div>
+      <div class="pt-grid">
+        <div class="pt-item">
+          <div class="lbl">Mobile</div>
+          <div class="phone-row">
+            <input type="tel" id="phone-inp" placeholder="Enter number" oninput="updatePreview()">
+          </div>
+          <div class="phone-warn" id="phone-warn">No phone found — please enter manually</div>
+        </div>
+        <div class="pt-item">
+          <div class="lbl">Order type</div>
+          <div class="val" id="pt-type">—</div>
+        </div>
+        <div class="pt-item">
+          <div class="lbl">Expected collection</div>
+          <div class="val" id="pt-date">—</div>
+        </div>
+        <div class="pt-item">
+          <div class="lbl">Balance due</div>
+          <div class="val" id="pt-balance">—</div>
+        </div>
+        <div class="pt-item">
+          <div class="lbl">Lab / supplier</div>
+          <div class="val" id="pt-lab">—</div>
+        </div>
+        <div class="pt-item">
+          <div class="lbl">Sales person</div>
+          <div class="val" id="pt-staff">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="not-found" id="not-found">Order not found in today's list. Check the barcode or enter details manually.</div>
+    <div id="picklist" style="display:none;margin-top:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">Multiple matches — select order</div>
+      <div id="picklist-items"></div>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card">
+    <div class="card-title">Step 3 · Product Type</div>
+    <div class="prod-grid">
+      <div class="prod-opt">
+        <input type="radio" name="prod" id="p-gl" value="glasses" checked onchange="onProdChange()">
+        <label for="p-gl"><span class="icon">👓</span><span class="nm">Glasses</span></label>
+      </div>
+      <div class="prod-opt">
+        <input type="radio" name="prod" id="p-cl" value="cl" onchange="onProdChange()">
+        <label for="p-cl"><span class="icon">💧</span><span class="nm">Contact Lenses</span></label>
+      </div>
+      <div class="prod-opt">
+        <input type="radio" name="prod" id="p-ok" value="orthok" onchange="onProdChange()">
+        <label for="p-ok"><span class="icon">🌙</span><span class="nm">OrthoK</span></label>
+      </div>
+    </div>
+
+    <div class="ok-slots" id="ok-slots">
+      <div class="slot-note">💡 Recommended: Friday 3:00pm for fitting · Saturday 9:00am for Day-1 check. Slot 2 auto-fills to next day when Slot 1 is set.</div>
+      <div style="height:12px"></div>
+
+      <div class="slot-section">
+        <div class="slot-lbl"><span>Slot 1</span> — Fitting &amp; instruction session (weekdays, latest 3:30pm)</div>
+        <div class="slot-row">
+          <div class="field"><label>Date</label>
+            <input type="date" id="s1-date" onchange="autoSlot2();updatePreview()">
+          </div>
+          <div class="field"><label>Time</label>
+            <select id="s1-time" onchange="updatePreview()"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="slot-section">
+        <div class="slot-lbl"><span>Slot 2</span> — Day-1 overnight check (next morning, 9:00am)</div>
+        <div class="slot-row">
+          <div class="field"><label>Date</label>
+            <input type="date" id="s2-date" onchange="updatePreview()">
+          </div>
+          <div class="field"><label>Time</label>
+            <select id="s2-time" onchange="updatePreview()"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="card">
+    <div class="card-title">Step 4 · Message Preview</div>
+    <div class="lang-tabs">
+      <button class="lang-tab active" onclick="setLang('both',this)">Both</button>
+      <button class="lang-tab" onclick="setLang('en',this)">English</button>
+      <button class="lang-tab" onclick="setLang('zh',this)">中文</button>
+    </div>
+    <div class="msg-box" id="msg-box"><span class="msg-ph">Scan an order to preview the message</span></div>
+    <div class="msg-actions">
+      <a href="#" class="btn-wa" id="wa-btn" onclick="sendWA(event)">
+        <svg class="wa-svg" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.564 4.142 1.547 5.876L0 24l6.318-1.52A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.013-1.376l-.36-.214-3.736.899.939-3.635-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+        Open WhatsApp
+      </a>
+      <button class="btn-copy" id="copy-btn" onclick="copyMsg()">Copy</button>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="card">
+    <div class="log-hdr">
+      <div class="card-title" style="margin-bottom:0">Contact Log</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="log-ct" id="log-ct">0 today</span>
+        <div class="log-btns">
+          <button class="btn-sm" onclick="exportLog()">Export CSV</button>
+          <button class="btn-sm red" onclick="clearOld()">Clear old</button>
+        </div>
+      </div>
+    </div>
+    <div class="log-empty" id="log-empty">No contacts sent today</div>
+    <table class="log-tbl" id="log-tbl" style="display:none">
+      <thead><tr>
+        <th>Time</th><th>Patient</th><th>Phone</th><th>Type</th><th>Order</th><th>By</th><th></th>
+      </tr></thead>
+      <tbody id="log-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let orders = {};
+let current = null;
+let lang = 'both';
+let scanTimer = null;
+
+// ─── SCRIPTS (from staff template) ───────────────────────────────────────────
+// Placeholders: {name} {balance_note} {balance_note_zh} {slot1_date} {slot1_time} {slot2_date} {slot2_time}
+const SCRIPTS = {
+
+  glasses: {
+    en:
+`Hi {name}, we would like to inform you that your glasses are ready for collection. You may come by during our opening hours to collect them.
+
+Address: 390 Orchard Road, #07-03 Palais Renaissance, Singapore 238871
+(Please take the office lift to reach our centre.)
+
+Opening hours:
+Mon – Fri  9:00am – 5:30pm  |  Sat  9:00am – 12:30pm
+
+Please note: we may close earlier on certain days, so kindly make an appointment with us before coming.{balance_note}
+
+Thank you.`,
+    zh:
+`Hi {name}，您的眼镜已经可以领取了。您可以在我们的营业时间内前来领取。
+
+地址：390 Orchard Road, #07-03 Palais Renaissance, Singapore 238871
+（请乘搭办公楼电梯到达本中心。）
+
+营业时间：
+星期一至星期五  9:00am – 5:30pm  |  星期六  9:00am – 12:30pm
+
+请注意：我们有些日子可能会提早结束营业，建议您来之前先与我们预约。{balance_note_zh}
+
+谢谢。`
+  },
+
+  cl: {
+    en:
+`Hi {name}, we would like to inform you that your contact lenses have arrived and are ready for collection. You may come by during our opening hours to collect them.
+
+Address: 390 Orchard Road, #07-03 Palais Renaissance, Singapore 238871
+(Please take the office lift to reach our centre.)
+
+Opening hours:
+Mon – Fri  9:00am – 5:30pm  |  Sat  9:00am – 12:30pm
+
+Please note: we may close earlier on certain days, so kindly make an appointment with us before coming.{balance_note}
+
+Thank you.`,
+    zh:
+`Hi {name}，您的隐形眼镜已经到货，可以领取了。您可以在我们的营业时间内前来领取。
+
+地址：390 Orchard Road, #07-03 Palais Renaissance, Singapore 238871
+（请乘搭办公楼电梯到达本中心。）
+
+营业时间：
+星期一至星期五  9:00am – 5:30pm  |  星期六  9:00am – 12:30pm
+
+请注意：我们有些日子可能会提早结束营业，建议您来之前先与我们预约。{balance_note_zh}
+
+谢谢。`
+  },
+
+  orthok: {
+    en:
+`Hi {name}, we would like to inform you that your Orthokeratology lenses have arrived. We will need to arrange a 2-hour teaching/fitting session on a weekday, followed by the first overnight review the next day.
+
+We would like to propose the following dates:
+
+{slot1_day}, {slot1_date} at {slot1_time} (fit and teach)  →  {slot2_day}, {slot2_date} at {slot2_time} (first overnight review)
+
+Do let us know if this arrangement works for you.{balance_note}
+
+Thank you.`,
+    zh:
+`Hi {name}，您的角膜塑形镜（OrthoK / OK镜）已经到货了。我们需要安排一次约2小时的试戴 / 配戴教学，并于次日进行首次过夜复查。
+
+我们建议您于 {slot1_day}，{slot1_date} {slot1_time} 前来进行试戴 / 配戴教学，并于 {slot2_day}，{slot2_date} {slot2_time} 回来进行首次过夜复查。
+
+请告知这项安排是否方便您。{balance_note_zh}
+
+谢谢。`
+  }
+};
+
+// ─── PHONE ────────────────────────────────────────────────────────────────────
+function normalizePhone(raw) {
+  if (!raw) return null;
+  let s = String(raw).replace(/[^\d+]/g, '');
+  if (s.startsWith('+65')) s = s.slice(3);
+  else if (s.startsWith('65') && s.length > 9) s = s.slice(2);
+  return /^[689]\d{7}$/.test(s) ? s : null;
+}
+
+// ─── DATE / TIME ──────────────────────────────────────────────────────────────
+function fmtDate(v) {
+  if (!v) return '—';
+  // Handle Excel serial date numbers
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d) v = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  }
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  return d.toLocaleDateString('en-SG', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+
+function fmtTime(t) {
+  if (!t || t === '—') return '—';
+  const [h, m] = t.split(':').map(Number);
+  const ap = h >= 12 ? 'pm' : 'am';
+  return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
+}
+
+function fmtDay(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-SG', {weekday:'long'});
+}
+
+function buildTimeOptions() {
+  // 8:30am to 6:00pm in 15-min blocks
+  const opts = ['<option value="">Select time</option>'];
+  for (let h = 8; h <= 18; h++) {
+    const mins = (h === 8) ? [30] : (h === 18) ? [0] : [0, 15, 30, 45];
+    for (const m of mins) {
+      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      const ap = h >= 12 ? 'pm' : 'am';
+      const h12 = h % 12 || 12;
+      const label = `${h12}:${String(m).padStart(2,'0')}${ap}`;
+      opts.push(`<option value="${val}">${label}</option>`);
+    }
+  }
+  return opts.join('');
+}
+
+function initials(name) {
+  if (!name) return '?';
+  const p = name.trim().split(/\s+/);
+  return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length-1][0]).toUpperCase();
+}
+// ─── AUTO-FETCH FROM MAKE WEBHOOK ────────────────────────────────────────────
+// Configuration — do not share
+const _a = 'https://hook.eu1.make.com/';
+const _b = 'mmh5q66pqyhh1aan7o6bswx7wx';
+const _c = 'siu7mc';
+const MAKE_WEBHOOK = _a + _b + _c;
+
+async function fetchFromMake() {
+  setFetchState('loading');
+  try {
+    const resp = await fetch(MAKE_WEBHOOK);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const arrayBuffer = await resp.arrayBuffer();
+    const wb = XLSX.read(arrayBuffer, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    let headerRow = 0;
+    for (let r = range.s.r; r <= Math.min(range.s.r + 15, range.e.r); r++) {
+      const cell = ws[XLSX.utils.encode_cell({r, c: 0})];
+      if (cell && String(cell.v).trim() === 'Order No') { headerRow = r; break; }
+    }
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false, range: headerRow});
+    parseOrders(rows, 'OneDrive (auto-fetched)');
+  } catch(err) {
+    console.error('Fetch error:', err);
+    setFetchState('error', err.message);
+  }
+}
+
+function setFetchState(state, msg) {
+  const icon = document.getElementById('fetch-icon');
+  const name = document.getElementById('loaded-name');
+  const ct = document.getElementById('loaded-ct');
+  const bar = document.querySelector('#fetch-status .loaded-bar');
+  if (!bar) return;
+  if (state === 'loading') {
+    icon.textContent = '⏳';
+    name.textContent = 'Loading latest orders from OneDrive...';
+    ct.textContent = 'Fetching via Make.com';
+    bar.style.background = 'rgba(184,150,106,0.08)';
+    bar.style.border = '1px solid var(--border-s)';
+    name.style.color = 'var(--text)';
+    ct.style.color = 'var(--muted)';
+  } else if (state === 'ok') {
+    icon.textContent = '✅';
+    bar.style.background = 'rgba(59,109,17,0.06)';
+    bar.style.border = '1px solid rgba(59,109,17,0.2)';
+    name.style.color = '#3B6D11';
+    ct.style.color = '#3B6D11';
+  } else if (state === 'error') {
+    icon.textContent = '❌';
+    name.textContent = 'Could not load — ' + (msg || 'unknown error');
+    ct.textContent = 'Check Make.com is active · tap Refresh to retry';
+    bar.style.background = '#FCEBEB';
+    bar.style.border = '1px solid #F7C1C1';
+    name.style.color = '#A32D2D';
+    ct.style.color = '#A32D2D';
+  }
+}
+
+function onDrag(e, over) { e.preventDefault(); }
+function onDrop(e) { e.preventDefault(); }
+function handleFile(file) {}
+function resetUpload() { fetchFromMake(); }
+
+function handleManualUpload(file) {
+  if (!file) return;
+  setFetchState('loading');
+  document.getElementById('loaded-name').textContent = 'Reading ' + file.name + '...';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      let headerRow = 0;
+      for (let r = range.s.r; r <= Math.min(range.s.r + 15, range.e.r); r++) {
+        const cell = ws[XLSX.utils.encode_cell({r, c: 0})];
+        if (cell && String(cell.v).trim() === 'Order No') { headerRow = r; break; }
+      }
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false, range: headerRow});
+      parseOrders(rows, file.name + ' (manual upload)');
+    } catch(err) {
+      setFetchState('error', 'Could not read file');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── PARSE ORDERS ────────────────────────────────────────────────────────────
+function parseOrders(rows, filename) {
+  orders = {};
+  let count = 0;
+
+  const exact = (row, ...names) => {
+    for (const n of names) {
+      if (row[n] !== undefined && String(row[n]).trim() !== '') return String(row[n]).trim();
+    }
+    return '';
+  };
+
+  for (const row of rows) {
+    const orderNo = exact(row, 'Order No');
+    if (!orderNo || !/^OR-EP\d+/i.test(orderNo)) continue;
+
+    const mobile = exact(row, 'Mobile No.', 'Mobile No') || exact(row, 'Contact No.', 'Contact No');
+
+    const entry = {
+      orderNo,
+      name:        exact(row, 'Customer Name'),
+      mobile,
+      type:        exact(row, 'Type'),
+      balance:     parseFloat(String(exact(row, 'Balance')).replace(/[^0-9.]/g,'')) || 0,
+      lab:         exact(row, 'Lab Name / Supplier', 'Lab Name'),
+      labRemarks:  exact(row, 'Lab Remarks'),
+      staff:       exact(row, 'Sales Person'),
+      collectDate: exact(row, 'Date of Collection'),
+    };
+
+    const key = orderNo.toUpperCase().replace(/\s/g,'');
+    orders[key] = entry;
+    count++;
+  }
+
+  if (count === 0) {
+    setFetchState('error', 'No valid orders found in file');
+    showAlert('No valid orders found. Please use the Frontwave Uncollected Orders export.', 'err');
+    return;
+  }
+
+  sessionStorage.setItem('ep_orders', JSON.stringify(orders));
+  const now = new Date().toLocaleTimeString('en-SG', {hour:'2-digit', minute:'2-digit'});
+  sessionStorage.setItem('ep_fetch_time', now);
+
+  document.getElementById('loaded-name').textContent = count + ' uncollected orders loaded';
+  document.getElementById('loaded-ct').textContent = 'Last updated ' + now + ' · ' + filename;
+  setFetchState('ok');
+
+  const pill = document.getElementById('hdr-pill');
+  pill.textContent = count + ' orders ready';
+  pill.classList.add('ok');
+  showAlert(count + ' orders loaded. Ready to scan.', 'ok');
+}
+
+// ─── SCAN ─────────────────────────────────────────────────────────────────────
+function onScanInput(val) {
+  clearTimeout(scanTimer);
+  const v = val.trim();
+  if (!v) { hidePatient(); hidePicklist(); return; }
+  scanTimer = setTimeout(() => lookup(v), 320);
+}
+
+function ensureOrders() {
+  if (Object.keys(orders).length > 0) return true;
+  const stored = sessionStorage.getItem('ep_orders');
+  if (stored) { orders = JSON.parse(stored); return true; }
+  showAlert('Please upload today\'s uncollected list first.', 'err');
+  return false;
+}
+
+function lookup(raw) {
+  if (!ensureOrders()) return;
+  document.getElementById('not-found').classList.remove('show');
+  hidePicklist();
+
+  const input = raw.toUpperCase().replace(/\s/g,'');
+
+  // Full order number match first (barcode scanner path)
+  if (orders[input]) {
+    selectOrder(orders[input]);
+    return;
+  }
+
+  // Partial suffix match: 3+ digits typed manually
+  if (/^\d{3,}$/.test(raw)) {
+    const matches = Object.values(orders).filter(o =>
+      o.orderNo.replace(/\D/g,'').endsWith(raw)
+    );
+    if (matches.length === 1) {
+      selectOrder(matches[0]);
+    } else if (matches.length > 1) {
+      showPicklist(matches);
+    } else {
+      hidePatient();
+      document.getElementById('not-found').classList.add('show');
+    }
+    return;
+  }
+
+  // Partial full-string match (e.g. typed part of order number)
+  const matches = Object.values(orders).filter(o =>
+    o.orderNo.toUpperCase().includes(input)
+  );
+  if (matches.length === 1) {
+    selectOrder(matches[0]);
+  } else if (matches.length > 1) {
+    showPicklist(matches);
+  } else {
+    hidePatient();
+    document.getElementById('not-found').classList.add('show');
+  }
+}
+
+function selectOrder(o) {
+  hidePicklist();
+  current = o;
+  showPatient(o);
+  autoProduct(o.type);
+  updatePreview();
+}
+
+function showPicklist(matches) {
+  hidePatient();
+  const list = document.getElementById('picklist');
+  const items = document.getElementById('picklist-items');
+  items.innerHTML = matches.map(o => {
+    const bal = o.balance > 0 ? `<span style="color:#A32D2D;font-size:10px"> · $${o.balance.toFixed(2)} owing</span>` : '';
+    return `<div class="picklist-item" onclick="selectFromList('${o.orderNo.toUpperCase().replace(/\s/g,'')}')">
+      <div style="font-weight:500;font-size:13px">${o.name || '—'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:monospace">${o.orderNo}${bal}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:1px">${o.type || ''} · ${o.collectDate || ''} · ${o.staff || ''}</div>
+    </div>`;
+  }).join('');
+  list.style.display = 'block';
+}
+
+function selectFromList(key) {
+  const o = orders[key];
+  if (o) selectOrder(o);
+}
+
+function hidePicklist() {
+  document.getElementById('picklist').style.display = 'none';
+}
+
+function showPatient(o) {
+  document.getElementById('pt-card').classList.add('show');
+  document.getElementById('not-found').classList.remove('show');
+  document.getElementById('pt-avatar').textContent = initials(o.name);
+  document.getElementById('pt-name').textContent = o.name || '—';
+  document.getElementById('pt-ref').textContent = o.orderNo;
+  document.getElementById('pt-type').textContent = o.type || '—';
+  document.getElementById('pt-date').textContent = o.collectDate ? fmtDate(o.collectDate) : '—';
+  document.getElementById('pt-lab').textContent = o.lab || '—';
+  document.getElementById('pt-staff').textContent = o.staff || '—';
+
+  const bal = o.balance || 0;
+  const balEl = document.getElementById('pt-balance');
+  balEl.textContent = bal > 0 ? '$' + bal.toFixed(2) + ' owing' : 'Fully paid';
+  balEl.className = 'val ' + (bal > 0 ? 'warn' : 'ok');
+
+  const phone = normalizePhone(o.mobile);
+  const inp = document.getElementById('phone-inp');
+  const warn = document.getElementById('phone-warn');
+  if (phone) { inp.value = phone; warn.style.display = 'none'; }
+  else { inp.value = ''; warn.style.display = 'block'; }
+}
+
+function hidePatient() {
+  current = null;
+  document.getElementById('pt-card').classList.remove('show');
+  document.getElementById('msg-box').innerHTML = '<span class="msg-ph">Scan an order to preview the message</span>';
+}
+
+function clearScan() {
+  document.getElementById('scan-inp').value = '';
+  document.getElementById('not-found').classList.remove('show');
+  hidePatient();
+}
+
+// ─── PRODUCT ──────────────────────────────────────────────────────────────────
+function autoProduct(type) {
+  const t = (type || '').toLowerCase();
+  // Excel "Type" column is "Spectacle" or "Contact Lens"
+  if (t.includes('contact')) document.getElementById('p-cl').checked = true;
+  else document.getElementById('p-gl').checked = true;
+  onProdChange();
+}
+
+function onProdChange() {
+  const isOK = document.querySelector('input[name=prod]:checked').value === 'orthok';
+  document.getElementById('ok-slots').classList.toggle('show', isOK);
+  updatePreview();
+}
+
+// ─── ORTHOK SLOT AUTO-FILL ────────────────────────────────────────────────────
+function autoSlot2() {
+  const d1 = document.getElementById('s1-date').value;
+  if (!d1) return;
+  const next = new Date(d1 + 'T00:00:00');
+  next.setDate(next.getDate() + 1);
+  const iso = next.toISOString().split('T')[0];
+  const s2d = document.getElementById('s2-date');
+  // Only auto-fill if slot 2 is empty
+  if (!s2d.value) s2d.value = iso;
+  // Auto-fill slot 2 time to 09:00 if not set
+  const s2t = document.getElementById('s2-time');
+  if (!s2t.value) s2t.value = '09:00';
+}
+
+// ─── MESSAGE BUILD ────────────────────────────────────────────────────────────
+function buildMsg() {
+  if (!current) return null;
+  const prod = document.querySelector('input[name=prod]:checked').value;
+  const firstName = (current.name || 'there').split(/\s+/)[0];
+  const bal = current.balance || 0;
+
+  const balEN = bal > 0
+    ? `\n\n⚠️ Please note: there is a remaining balance of *$${bal.toFixed(2)}* on this order. Payment can be made by PayNow, NETS, or card when you collect.`
+    : '';
+  const balZH = bal > 0
+    ? `\n\n⚠️ 请注意：此订单尚有 *$${bal.toFixed(2)}* 余款未付，取货时可通过PayNow、NETS或刷卡付款。`
+    : '';
+
+  let s1day = '—', s1d = '—', s1t = '—', s2day = '—', s2d = '—', s2t = '—';
+  if (prod === 'orthok') {
+    const s1v = document.getElementById('s1-date').value;
+    const s2v = document.getElementById('s2-date').value;
+    s1day = fmtDay(s1v);
+    s1d   = s1v ? fmtDate(s1v) : '—';
+    s1t   = fmtTime(document.getElementById('s1-time').value);
+    s2day = fmtDay(s2v);
+    s2d   = s2v ? fmtDate(s2v) : '—';
+    s2t   = fmtTime(document.getElementById('s2-time').value);
+  }
+
+  const fill = tmpl => tmpl
+    .replace(/{name}/g, firstName)
+    .replace(/{balance_note}/g, balEN)
+    .replace(/{balance_note_zh}/g, balZH)
+    .replace(/{slot1_day}/g, s1day)
+    .replace(/{slot1_date}/g, s1d)
+    .replace(/{slot1_time}/g, s1t)
+    .replace(/{slot2_day}/g, s2day)
+    .replace(/{slot2_date}/g, s2d)
+    .replace(/{slot2_time}/g, s2t);
+
+  const s = SCRIPTS[prod];
+  const en = fill(s.en);
+  const zh = fill(s.zh);
+
+  if (lang === 'en') return en;
+  if (lang === 'zh') return zh;
+  return en + '\n\n──────────\n\n' + zh;
+}
+
+function updatePreview() {
+  const msg = buildMsg();
+  const box = document.getElementById('msg-box');
+  if (!msg) { box.innerHTML = '<span class="msg-ph">Scan an order to preview the message</span>'; return; }
+  box.textContent = msg;
+}
+
+function setLang(l, btn) {
+  lang = l;
+  document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  updatePreview();
+}
+
+// ─── SEND / COPY ──────────────────────────────────────────────────────────────
+function sendWA(e) {
+  e.preventDefault();
+  if (!current) { showAlert('Scan an order first.', 'err'); return; }
+
+  const rawPhone = document.getElementById('phone-inp').value.trim();
+  const phone = normalizePhone(rawPhone);
+  if (!phone) { showAlert('Please enter a valid 8-digit Singapore mobile number.', 'err'); return; }
+
+  const msg = buildMsg();
+  if (!msg) return;
+
+  const url = `https://wa.me/65${phone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+  logEntry(phone);
+  showAlert(`WhatsApp opened for ${current.name}. Logged.`, 'ok');
+}
+
+function copyMsg() {
+  const msg = buildMsg();
+  if (!msg) { showAlert('Scan an order first.', 'err'); return; }
+  navigator.clipboard.writeText(msg).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ─── LOG ──────────────────────────────────────────────────────────────────────
+function logEntry(phone) {
+  const prod = document.querySelector('input[name=prod]:checked').value;
+  const entry = {
+    id: Date.now(),
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString('en-SG', {hour:'2-digit', minute:'2-digit'}),
+    name: current.name,
+    phone,
+    prod,
+    orderNo: current.orderNo,
+    staff: current.staff,
+    phone_raw: phone
+  };
+  const log = JSON.parse(localStorage.getItem('ep_coll_log') || '[]');
+  log.unshift(entry);
+  localStorage.setItem('ep_coll_log', JSON.stringify(log));
+  renderLog();
+}
+
+function renderLog() {
+  const log = JSON.parse(localStorage.getItem('ep_coll_log') || '[]');
+  const today = new Date().toISOString().split('T')[0];
+  const todayCt = log.filter(e => e.date === today).length;
+
+  document.getElementById('log-ct').textContent = todayCt + ' today';
+
+  const empty = document.getElementById('log-empty');
+  const tbl = document.getElementById('log-tbl');
+  if (!log.length) { empty.style.display = 'block'; tbl.style.display = 'none'; return; }
+  empty.style.display = 'none';
+  tbl.style.display = 'table';
+
+  const labels = {glasses:['Glasses','bg'], cl:['Contact Lens','bc'], orthok:['OrthoK','bo']};
+  const tbody = document.getElementById('log-tbody');
+  tbody.innerHTML = log.slice(0,40).map(e => {
+    const [lbl, cls] = labels[e.prod] || ['—',''];
+    const isToday = e.date === today;
+    const dateLbl = isToday ? '' : `<span style="font-size:10px;color:var(--muted)"> ${e.date}</span>`;
+    // Rebuild WA link for resend
+    const s = SCRIPTS[e.prod];
+    let msg = '';
+    if (s) {
+      msg = encodeURIComponent(s.en.replace(/{name}/g,'').replace(/{balance_note}/g,'').replace(/{balance_note_zh}/g,'').replace(/{slot1_date}/g,'—').replace(/{slot1_time}/g,'—').replace(/{slot2_date}/g,'—').replace(/{slot2_time}/g,'—'));
+    }
+    const waUrl = `https://wa.me/65${e.phone}?text=${msg}`;
+    return `<tr>
+      <td>${e.time}${dateLbl}</td>
+      <td style="font-weight:500">${e.name || '—'}</td>
+      <td>${e.phone ? e.phone.slice(0,4)+' '+e.phone.slice(4) : '—'}</td>
+      <td><span class="badge ${cls}">${lbl}</span></td>
+      <td style="font-family:monospace;font-size:11px;color:var(--muted)">${(e.orderNo||'').replace('OR-EP126','…')}</td>
+      <td style="font-size:11px">${e.staff||'—'}</td>
+      <td><a href="${waUrl}" target="_blank" class="btn-rs">Resend</a><button class="btn-dl" onclick="delLog(${e.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delLog(id) {
+  const log = JSON.parse(localStorage.getItem('ep_coll_log') || '[]').filter(e => e.id !== id);
+  localStorage.setItem('ep_coll_log', JSON.stringify(log));
+  renderLog();
+}
+
+function clearOld() {
+  const today = new Date().toISOString().split('T')[0];
+  const log = JSON.parse(localStorage.getItem('ep_coll_log') || '[]').filter(e => e.date === today);
+  localStorage.setItem('ep_coll_log', JSON.stringify(log));
+  renderLog();
+  showAlert('Old log entries cleared.', 'ok');
+}
+
+function exportLog() {
+  const log = JSON.parse(localStorage.getItem('ep_coll_log') || '[]');
+  if (!log.length) { showAlert('No log entries to export.', 'err'); return; }
+  const hdr = ['Date','Time','Patient Name','Phone','Product','Order No','Staff'];
+  const rows = log.map(e => [e.date, e.time, e.name||'', e.phone||'', e.prod, e.orderNo||'', e.staff||'']);
+  const csv = [hdr,...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+    download: `EP_Collection_Log_${new Date().toISOString().split('T')[0]}.csv`
+  });
+  a.click();
+}
+
+// ─── ALERT ────────────────────────────────────────────────────────────────────
+function showAlert(msg, type) {
+  const box = document.getElementById('alert-box');
+  box.textContent = msg;
+  box.className = 'alert ' + (type === 'ok' ? 'a-ok' : 'a-err');
+  box.style.display = 'block';
+  setTimeout(() => box.style.display = 'none', 4000);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+// Restore session if page reloaded
+(function init() {
+  // Populate OrthoK time selects
+  const timeHtml = buildTimeOptions();
+  document.getElementById('s1-time').innerHTML = timeHtml;
+  document.getElementById('s2-time').innerHTML = timeHtml;
+  // Default slot 2 time to 9:00am
+  document.getElementById('s2-time').value = '09:00';
+  const stored = sessionStorage.getItem('ep_orders');
+  if (stored) {
+    try {
+      orders = JSON.parse(stored);
+      const ct = Object.keys(orders).length;
+      document.getElementById('dz-wrap').style.display = 'none';
+      document.getElementById('loaded-bar').style.display = 'block';
+      document.getElementById('loaded-name').textContent = 'Session restored';
+      document.getElementById('loaded-ct').textContent = ct + ' orders in memory';
+      const pill = document.getElementById('hdr-pill');
+      pill.textContent = ct + ' orders ready';
+      pill.classList.add('ok');
+    } catch(e) {}
+  }
+  renderLog();
+  // Focus scan field
+  document.getElementById('scan-inp').focus();
+})();
+
+// ─── PIN LOCK ─────────────────────────────────────────────────────────────────
+// Change this PIN to whatever you want
+const APP_PIN = '1234';
+
+let pinEntry = '';
+
+function pinKey(digit) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += digit;
+  updatePinDots();
+  if (pinEntry.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinDel() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function pinClear() {
+  pinEntry = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('d' + i).classList.toggle('filled', i < pinEntry.length);
+  }
+}
+
+function checkPin() {
+  if (pinEntry === APP_PIN) {
+    document.getElementById('pin-overlay').style.display = 'none';
+    sessionStorage.setItem('ep_pin_ok', '1');
+  } else {
+    document.getElementById('pin-error').textContent = 'Incorrect PIN — try again';
+    pinEntry = '';
+    updatePinDots();
+  }
+}
+
+// Skip PIN if already authenticated this session
+if (sessionStorage.getItem('ep_pin_ok') === '1') {
+  document.getElementById('pin-overlay').style.display = 'none';
+}
+
+</script>
+</body>
+</html>
